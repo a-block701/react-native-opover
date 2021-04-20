@@ -296,7 +296,7 @@ class PopoverTooltip extends React.PureComponent<Props, State> {
           <Animated.View style={[
             styles.overlay,
             this.props.overlayStyle,
-            { opacity: this.state.opacity },
+            { opacity: this.state.opacity, zIndex: 100 },
           ]}>
             <TouchableOpacity
               activeOpacity={1}
