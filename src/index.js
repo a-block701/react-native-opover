@@ -1,499 +1,341 @@
-// @flow
-
-import type {
-  StyleObj,
-} from 'react-native/Libraries/StyleSheet/StyleSheetTypes';
-
-import * as React from 'react';
+import React, { Component } from 'react';
+import { SafeAreaView } from 'react-navigation';
 import {
+  ScrollView,
+  Image,
   View,
-  Modal,
-  Animated,
   TouchableOpacity,
-  StyleSheet,
+  FlatList,
   Dimensions,
-  Text,
-  Easing,
-  ViewPropTypes,
 } from 'react-native';
-import PropTypes from 'prop-types';
-import invariant from 'invariant';
+import { connect } from 'react-redux';
+import PopoverTooltip from 'react-native-popover-tooltip';
+import { Images, Icons } from '@AppTheme';
+import { SideMenu, Text, Button, StaxListItem } from '../../../components';
+import styles from './styles';
+import { staxActions } from '../../../redux/actions';
+import { StaxItemHorizontal } from '../components';
+import { formatAmount } from '../../../utils';
 
-import PopoverTooltipItem, { type Label, labelPropType }
-  from './PopoverTooltipItem';
+const { width } = Dimensions.get('window');
 
-const window = Dimensions.get('window');
-
-type Props = {
-  buttonComponent: React.Node,
-  buttonComponentExpandRatio: number,
-  items: $ReadOnlyArray<{ +label: Label, onPress: () => void }>,
-  componentWrapperStyle?: StyleObj,
-  overlayStyle?: StyleObj,
-  tooltipContainerStyle?: StyleObj,
-  labelContainerStyle?: StyleObj,
-  labelSeparatorColor: string,
-  labelStyle?: StyleObj,
-  setBelow: bool,
-  animationType?: "timing" | "spring",
-  onRequestClose: () => void,
-  triangleOffset: number,
-  delayLongPress: number,
-  onOpenTooltipMenu?: () => void,
-  onCloseTooltipMenu?: () => void,
-  onPress?: () => void,
-  componentContainerStyle?: StyleObj,
-  timingConfig?: { duration?: number },
-  springConfig?: { tension?: number, friction?: number },
-  opacityChangeDuration?: number,
+const adData = {
+  heading: 'TheXchange Banner',
+  content:
+    'Lorem ipsum dolor sit amet consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna',
+  image:
+    'https://image.shutterstock.com/shutterstock/photos/1529923664/display_1500/stock-photo-waves-of-water-of-the-river-and-the-sea-meet-each-other-during-high-tide-and-low-tide-whirlpools-1529923664.jpg',
 };
-type State = {
-  isModalOpen: bool,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  opacity: Animated.Value,
-  tooltipContainerScale: Animated.Value,
-  buttonComponentContainerScale: number | Animated.Interpolation,
-  tooltipTriangleDown: bool,
-  tooltipTriangleLeftMargin: number,
-  triangleOffset: number,
-  willPopUp: bool,
-  oppositeOpacity: ?Animated.Interpolation,
-  tooltipContainerX: ?Animated.Interpolation,
-  tooltipContainerY: ?Animated.Interpolation,
-  buttonComponentOpacity: number,
-};
-class PopoverTooltip extends React.PureComponent<Props, State> {
-
-  static propTypes = {
-    buttonComponent: PropTypes.node.isRequired,
-    buttonComponentExpandRatio: PropTypes.number,
-    items: PropTypes.arrayOf(PropTypes.shape({
-      label: labelPropType.isRequired,
-      onPress: PropTypes.func.isRequired,
-    })).isRequired,
-    componentWrapperStyle: ViewPropTypes.style,
-    overlayStyle: ViewPropTypes.style,
-    tooltipContainerStyle: ViewPropTypes.style,
-    labelContainerStyle: ViewPropTypes.style,
-    labelSeparatorColor: PropTypes.string,
-    labelStyle: Text.propTypes.style,
-    setBelow: PropTypes.bool,
-    animationType: PropTypes.oneOf([ "timing", "spring" ]),
-    onRequestClose: PropTypes.func,
-    triangleOffset: PropTypes.number,
-    delayLongPress: PropTypes.number,
-    onOpenTooltipMenu: PropTypes.func,
-    onCloseTooltipMenu: PropTypes.func,
-    onPress: PropTypes.func,
-    componentContainerStyle: ViewPropTypes.style,
-    timingConfig: PropTypes.object,
-    springConfig: PropTypes.object,
-    opacityChangeDuration: PropTypes.number,
-  };
-  static defaultProps = {
-    buttonComponentExpandRatio: 1.0,
-    labelSeparatorColor: "#E1E1E1",
-    onRequestClose: () => {},
-    setBelow: false,
-    delayLongPress: 100,
-    triangleOffset: 0,
-  };
-  wrapperComponent: ?TouchableOpacity;
-
-  constructor(props: Props) {
+class HomeScreen extends Component {
+  constructor(props) {
     super(props);
+
     this.state = {
-      isModalOpen: false,
-      x: 0,
-      y: 0,
-      width: 0,
-      height: 0,
-      opacity: new Animated.Value(0),
-      tooltipContainerScale: new Animated.Value(0),
-      buttonComponentContainerScale: 1,
-      tooltipTriangleDown: !props.setBelow,
-      tooltipTriangleLeftMargin: 0,
-      triangleOffset: props.triangleOffset,
-      willPopUp: false,
-      oppositeOpacity: undefined,
-      tooltipContainerX: undefined,
-      tooltipContainerY: undefined,
-      buttonComponentOpacity: 0,
+      activeTab: 1,
+      showAd: true,
+      refsArray: [],
+      activeStax: null,
     };
   }
 
-  componentWillMount() {
-    const newOppositeOpacity = this.state.opacity.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 0],
+  componentDidMount() {
+    const { navigation } = this.props;
+    this.focusListener = navigation.addListener('didFocus', () => {
+      // this.loadPortfolioDetail();
+      this.searchStax();
     });
-    this.setState({ oppositeOpacity: newOppositeOpacity });
   }
 
-  toggleModal = () => {
-    this.setState({ isModalOpen: !this.state.isModalOpen });
+  componentWillUnmount() {
+    this.focusListener.remove();
   }
 
-  openModal = () => {
-    this.setState({ willPopUp: true });
-    this.toggleModal();
-    this.props.onOpenTooltipMenu && this.props.onOpenTooltipMenu();
+  searchStax = () => {
+    const { dispatch, activeSubxchange } = this.props;
+    dispatch(
+      staxActions.searchStax({
+        subxchange: activeSubxchange?.id,
+        limit: 100,
+        sortBy: 'new',
+        type: 'all',
+      }),
+    );
+  };
+
+  loadPortfolioDetail = async () => {
+    const { subxchanges } = this.props;
+    const subxchangeId =
+      subxchanges && subxchanges.length > 0 && subxchanges[0].id;
+    this.props.dispatch(staxActions.getPortfolio(subxchangeId));
+  };
+
+  handleChangeTab = (tab) => {
+    this.setState({ activeTab: tab });
+  };
+
+  handleShowAD = () => {
+    this.setState({ showAd: false });
+  };
+
+  handlePressItem = (item) => {
+    this.props.navigation.navigate('IssuerPortfolio', { staxId: item.id });
+  };
+
+  renderDepositView() {
+    return (
+      <View style={styles.bannerView}>
+        <Image
+          source={Images.homeBanner}
+          style={styles.banner}
+          resizeMode="cover"
+        />
+        <Text style={styles.bannerTitle}>Let's fund your account!</Text>
+        <Text style={styles.bannerText}>
+          Start building your portfolio today!
+        </Text>
+        <Button
+          title={'Deposit Funds'}
+          style={styles.depositButton}
+          textStyle={styles.deposityButtonText}
+          onPress={() => this.props.navigation.navigate('Cash')}
+        />
+      </View>
+    );
   }
 
-  hideModal = () => {
-    this.setState({ willPopUp: false });
-    this.showZoomingOutAnimation();
-    this.props.onCloseTooltipMenu && this.props.onCloseTooltipMenu();
+  renderBuyStaxView() {
+    return (
+      <View>
+        <View style={[styles.row]}>
+          <View>
+            <Text style={styles.bannerText}>My Portfolio</Text>
+            <View style={[styles.row, { justifyContent: 'flex-start', marginTop: 5 }]}>
+              <Image source={Icons.unicorn} />
+              <Text style={styles.priceText}>{` ${formatAmount(Number(0))}`}</Text>
+            </View>
+          </View>
+          <PopoverTooltip
+            ref='tooltip4'
+            buttonComponent={
+              <Image source={Icons.iconList} />
+            }
+            items={[
+              {
+                label: 'Trade Mode',
+                onPress: () => { }
+              },
+              {
+                label: 'Orders & History',
+                onPress: () => { }
+              }
+            ]}
+            setBelow={true}
+            animationType='spring'
+            overlayStyle={{ backgroundColor: 'transparent' }} // set the overlay invisible
+            tooltipContainerStyle={{
+              borderRadius: 8,
+              borderColor: '#707070',
+              backgroundColor: '#191919',
+              paddingLeft: 10,
+              paddingTop: 5,
+              paddingBottom: 5,
+            }}
+            labelContainerStyle={{
+              width: 160,
+              alignItems: 'flex-start',
+            }}
+            labelSeparatorColor='#191919'
+            labelStyle={{ color: '#FFF'}}
+          />
+        </View>
+        <View style={styles.bannerContainer}>
+          <Text style={styles.bannerTitle}>Welcome to Fantasy Mode!</Text>
+          <Text style={styles.bannerText}>
+            {'Lorem ipsum dolor sit amet,\nconsetetur sadipscing elitr, sed'}
+          </Text>
+          <Button
+            title={'Buy Stax'}
+            style={styles.buyButton}
+            textStyle={styles.deposityButtonText}
+            onPress={() => this.props.navigation.navigate('Cash')}
+          />
+        </View>
+        <View style={styles.divider} />
+        <View style={[styles.row]}>
+          <Text style={styles.bannerText}>Fantasy Cash</Text>
+          <View>
+            <View style={[styles.row]}>
+              <Image source={Icons.unicorn} style={{ marginTop: 5 }} />
+              <Text style={styles.bannerText}>{formatAmount(Number(this.props.cashBalance))}</Text>
+              <Image source={Icons.help} style={{ marginLeft: 5, marginTop: 5 }} />
+            </View>
+          </View>
+        </View>
+        <View style={styles.divider} />
+      </View>
+    );
   }
 
-  onPressItem = (userCallback: () => void) => {
-    this.toggle();
-    userCallback();
+  renderAD() {
+    return (
+      <View style={styles.adView}>
+        <Image
+          style={styles.adImage}
+          source={{ uri: adData.image }}
+          resizeMode="cover"
+        />
+        <View style={styles.adSubView}>
+          <View style={styles.row}>
+            <Text style={styles.adTitle}>{adData.heading}</Text>
+            <TouchableOpacity onPress={this.handleShowAD}>
+              <Image source={Icons.cancel} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.adLabel}>{adData.content}</Text>
+        </View>
+      </View>
+    );
   }
 
-  onInnerContainerLayout = (
-    event: { nativeEvent: { layout: { height: number, width: number } } },
-  ) => {
-    const tooltipContainerWidth = event.nativeEvent.layout.width;
-    const tooltipContainerHeight = event.nativeEvent.layout.height;
-    if (
-      !this.state.willPopUp ||
-      tooltipContainerWidth === 0 ||
-      tooltipContainerHeight === 0
-    ) {
-      return;
-    }
+  renderTile = ({ item, index }) => {
+    return (
+      <View style={{ width: width / 3 }}>
+        <StaxItemHorizontal
+          data={item}
+          onPress={() => this.handlePressItem(item)}
+        />
+      </View>
+    );
+  };
 
-    const componentWrapper = this.wrapperComponent;
-    invariant(componentWrapper, "should be set");
-    componentWrapper.measure((x, y, width, height, pageX, pageY) => {
-      const fullWidth = pageX + tooltipContainerWidth
-        + (width - tooltipContainerWidth) / 2;
-      const tooltipContainerX_final = fullWidth > window.width
-        ? window.width - tooltipContainerWidth
-        : pageX + (width - tooltipContainerWidth) / 2;
-      let tooltipContainerY_final = this.state.tooltipTriangleDown
-        ? pageY - tooltipContainerHeight - 20
-        : pageY + tooltipContainerHeight - 20;
-      let tooltipTriangleDown = this.state.tooltipTriangleDown;
-      if (pageY - tooltipContainerHeight - 20 < 0) {
-        tooltipContainerY_final = pageY + height + 20;
-        tooltipTriangleDown = false;
+  renderList = ({ item, index }) => {
+    return (
+      <StaxListItem
+        data={item}
+        index={index}
+        refsArray={this.state.refsArray}
+        showTradeButtons={this.state.activeStax === item.id}
+      />
+    );
+  };
+
+  renderFavorite() {
+    const { staxes } = this.props;
+    const favoriteStaxes = staxes.filter((item) => item.followed === 1);
+    return (
+      <View style={styles.favoriteVeiw}>
+        <View style={styles.row}>
+          <Text style={styles.subTitle}>My Favorites</Text>
+          <TouchableOpacity
+            onPress={() => this.props.navigation.navigate('Stax')}
+          >
+            <Text style={styles.seeAll}>See All</Text>
+          </TouchableOpacity>
+        </View>
+        <FlatList
+          horizontal
+          bounces={false}
+          data={favoriteStaxes}
+          renderItem={this.renderTile}
+          keyExtractor={(item) => item.id}
+          key={'grid'}
+        />
+      </View>
+    );
+  }
+
+  renderTopPerformers() {
+    const { staxes } = this.props;
+    const topStaxes = staxes.filter((item) => item.verified === true);
+    return (
+      <View style={styles.favoriteVeiw}>
+        <View style={styles.row}>
+          <Text style={styles.subTitle}>Top Performers</Text>
+          <TouchableOpacity
+            onPress={() => this.props.navigation.navigate('Stax')}
+          >
+            <Text style={styles.seeAll}>See All</Text>
+          </TouchableOpacity>
+        </View>
+        <FlatList
+          horizontal
+          bounces={false}
+          data={topStaxes}
+          renderItem={this.renderTile}
+          keyExtractor={(item) => item.id}
+          key={'grid'}
+        />
+      </View>
+    );
+  }
+
+  renderAuctions() {
+    const { staxes, isoStatus } = this.props;
+    const { activeStax } = this.state;
+    const auctionStaxes = staxes.filter((item) => {
+      const isoInfo = isoStatus[`${item.ticker}USD`];
+      if (!isoInfo) {
+        return false;
       }
-      if (pageY + tooltipContainerHeight + 80 > window.height) {
-        tooltipContainerY_final = pageY - tooltipContainerHeight - 20;
-        tooltipTriangleDown = true;
+      if (isoInfo.state === 2) {
+        return true;
       }
-      const tooltipContainerX = this.state.tooltipContainerScale.interpolate({
-        inputRange: [0, 1],
-        outputRange: [tooltipContainerX_final, tooltipContainerX_final],
-      });
-      const tooltipContainerY = this.state.tooltipContainerScale.interpolate({
-        inputRange: [0, 1],
-        outputRange: [
-          tooltipContainerY_final + tooltipContainerHeight / 2 + 20,
-          tooltipContainerY_final,
-        ],
-      });
-      const buttonComponentContainerScale =
-        this.state.tooltipContainerScale.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, this.props.buttonComponentExpandRatio],
-        });
-      const tooltipTriangleLeftMargin =
-        pageX + width / 2 - tooltipContainerX_final - 10;
-      this.setState(
-        {
-          x: pageX,
-          y: pageY,
-          width,
-          height,
-          tooltipContainerX,
-          tooltipContainerY,
-          tooltipTriangleDown,
-          tooltipTriangleLeftMargin,
-          buttonComponentContainerScale,
-          buttonComponentOpacity: 1,
-        },
-        this.showZoomingInAnimation,
-      );
+      return false;
     });
-    this.setState({ willPopUp: false });
+    return (
+      <View style={styles.favoriteVeiw}>
+        <View style={styles.row}>
+          <Text style={styles.subTitle}>Auctions</Text>
+          <TouchableOpacity
+            onPress={() => this.props.navigation.navigate('Stax')}
+          >
+            <Text style={styles.seeAll}>See All</Text>
+          </TouchableOpacity>
+        </View>
+        <FlatList
+          data={auctionStaxes}
+          renderItem={this.renderList}
+          numColumns={1}
+          keyExtractor={(_item) => _item.id}
+          key={'list'}
+          style={styles.list}
+          extraData={activeStax}
+        />
+      </View>
+    );
   }
 
   render() {
-    const tooltipContainerStyle = {
-      left: this.state.tooltipContainerX,
-      top: this.state.tooltipContainerY,
-      transform: [
-        { scale: this.state.tooltipContainerScale },
-      ],
-    };
-
-    const items = this.props.items.map((item, index) => {
-      const classes = [ this.props.labelContainerStyle ];
-
-      if (index !== this.props.items.length - 1) {
-        classes.push([
-          styles.tooltipMargin,
-          { borderBottomColor: this.props.labelSeparatorColor },
-        ]);
-      }
-
-      return (
-        <PopoverTooltipItem
-          key={index}
-          label={item.label}
-          onPressUserCallback={item.onPress}
-          onPress={this.onPressItem}
-          containerStyle={classes}
-          labelStyle={this.props.labelStyle}
-        />
-      );
-    });
-
-    const labelContainerStyle = this.props.labelContainerStyle;
-    const borderStyle =
-      labelContainerStyle && labelContainerStyle.backgroundColor
-        ? { borderTopColor: labelContainerStyle.backgroundColor }
-        : null;
-    let triangleDown = null;
-    let triangleUp = null;
-    if (this.state.tooltipTriangleDown) {
-      triangleDown = (
-        <View style={[
-          styles.triangleDown,
-          {
-            marginLeft: this.state.tooltipTriangleLeftMargin,
-            left: this.state.triangleOffset,
-          },
-          borderStyle,
-        ]} />
-      );
-    } else {
-      triangleUp = (
-        <View style={[
-          styles.triangleUp,
-          {
-            marginLeft: this.state.tooltipTriangleLeftMargin,
-            left: this.state.triangleOffset,
-          },
-          borderStyle,
-        ]} />
-      );
-    }
+    const title = 'HOME';
+    const { showAd } = this.state;
 
     return (
-      <TouchableOpacity
-        ref={this.wrapperRef}
-        style={this.props.componentWrapperStyle}
-        onPress={this.props.onPress}
-        onLongPress={this.toggle}
-        delayLongPress={this.props.delayLongPress}
-        activeOpacity={1.0}
-      >
-        <Animated.View style={[
-          { opacity: this.state.oppositeOpacity },
-          this.props.componentContainerStyle,
-        ]}>
-          {this.props.buttonComponent}
-        </Animated.View>
-        <Modal
-          visible={this.state.isModalOpen}
-          onRequestClose={this.props.onRequestClose}
-          transparent
-        >
-          <Animated.View style={[
-            styles.overlay,
-            this.props.overlayStyle,
-            { opacity: this.state.opacity },
-          ]}>
-            <TouchableOpacity
-              activeOpacity={1}
-              focusedOpacity={1}
-              style={styles.button}
-              onPress={this.toggle}
-            >
-              <Animated.View
-                style={[
-                  styles.tooltipContainer,
-                  this.props.tooltipContainerStyle,
-                  tooltipContainerStyle,
-                ]}
-              >
-                <View
-                  onLayout={this.onInnerContainerLayout}
-                  style={styles.innerContainer}
-                >
-                  {triangleUp}
-                  <View style={[
-                    styles.allItemContainer,
-                    this.props.tooltipContainerStyle,
-                  ]}>
-                    {items}
-                  </View>
-                  {triangleDown}
-                </View>
-              </Animated.View>
-            </TouchableOpacity>
-          </Animated.View>
-          <Animated.View style={{
-            position: 'absolute',
-            left: this.state.x,
-            top: this.state.y,
-            width: this.state.width,
-            height: this.state.height,
-            backgroundColor: 'transparent',
-            opacity: this.state.buttonComponentOpacity, // At the first frame, the button will be rendered
-                                                        // in the top-left corner. So we dont render it
-                                                        // until its position has been calculated.
-            transform: [
-              { scale: this.state.buttonComponentContainerScale },
-            ],
-          }}>
-            <TouchableOpacity
-              onPress={this.toggle}
-              activeOpacity={1.0}
-            >
-              {this.props.buttonComponent}
-            </TouchableOpacity>
-          </Animated.View>
-        </Modal>
-      </TouchableOpacity>
+      <SafeAreaView style={styles.container}>
+        <SideMenu headerProps={{ title: '', showDropdown: true }} title={title}>
+          <ScrollView
+            style={styles.bodyContent}
+            contentContainerStyle={styles.bodyContentContainer}
+          >
+            {false ? this.renderDepositView() : this.renderBuyStaxView()}
+            {!!showAd && this.renderAD()}
+            {this.renderFavorite()}
+            {this.renderTopPerformers()}
+            {this.renderAuctions()}
+          </ScrollView>
+        </SideMenu>
+      </SafeAreaView>
     );
   }
-
-  wrapperRef = (wrapperComponent: ?TouchableOpacity) => {
-    this.wrapperComponent = wrapperComponent;
-  }
-
-  showZoomingInAnimation = () => {
-    let tooltipAnimation = Animated.timing(
-      this.state.tooltipContainerScale,
-      {
-        toValue: 1,
-        duration: this.props.timingConfig && this.props.timingConfig.duration
-          ? this.props.timingConfig.duration
-          : 200,
-      }
-    );
-    if (this.props.animationType == 'spring') {
-      tooltipAnimation = Animated.spring(
-        this.state.tooltipContainerScale,
-        {
-          toValue: 1,
-          tension: this.props.springConfig && this.props.springConfig.tension
-            ? this.props.springConfig.tension
-            : 100,
-          friction: this.props.springConfig && this.props.springConfig.friction
-            ? this.props.springConfig.friction
-            : 7,
-        },
-      );
-    }
-    Animated.parallel([
-      tooltipAnimation,
-      Animated.timing(
-        this.state.opacity,
-        {
-          toValue: 1,
-          duration: this.props.opacityChangeDuration
-            ? this.props.opacityChangeDuration
-            : 200,
-        },
-      ),
-    ]).start();
-  }
-
-  showZoomingOutAnimation() {
-    Animated.parallel([
-      Animated.timing(
-        this.state.tooltipContainerScale,
-        {
-          toValue: 0,
-          duration: this.props.opacityChangeDuration
-            ? this.props.opacityChangeDuration
-            : 200,
-        },
-      ),
-      Animated.timing(
-        this.state.opacity,
-        {
-          toValue: 0,
-          duration: this.props.opacityChangeDuration
-            ? this.props.opacityChangeDuration
-            : 200,
-        },
-      ),
-    ]).start(this.toggleModal);
-  }
-
-  toggle = () => {
-    if (this.state.isModalOpen) {
-      this.hideModal();
-    } else {
-      this.openModal();
-    }
-  }
-
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    flex: 1,
-  },
-  innerContainer: {
-    backgroundColor: 'transparent',
-    alignItems: 'flex-start'
-  },
-  tooltipMargin: {
-    borderBottomWidth: 1,
-  },
-  tooltipContainer: {
-    backgroundColor: 'transparent',
-    position: 'absolute',
-  },
-  triangleDown: {
-    width: 10,
-    height: 10,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderTopWidth: 10,
-    borderRightWidth: 10,
-    borderBottomWidth: 0,
-    borderLeftWidth: 10,
-    borderTopColor: 'white',
-    borderRightColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderLeftColor: 'transparent',
-  },
-  triangleUp: {
-    width: 10,
-    height: 10,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderTopWidth: 0,
-    borderRightWidth: 10,
-    borderBottomWidth: 10,
-    borderLeftWidth: 10,
-    borderBottomColor: 'white',
-    borderTopColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderLeftColor: 'transparent',
-  },
-  button: {
-    flex: 1,
-  },
-  allItemContainer: {
-    borderRadius: 5,
-    backgroundColor: 'white',
-    alignSelf: 'stretch',
-    overflow: 'hidden',
-  },
-});
+const mapStateToProps = ({ global, stax }) => {
+  return {
+    activeSubxchange: global.activeSubxchange,
+    subxchanges: global.subxchanges,
+    staxes: stax.staxes,
+    isoStatus: stax.isoStatus,
+    cashBalance: stax.cashBalance,
+  };
+};
 
-export default PopoverTooltip;
+export default connect(mapStateToProps)(HomeScreen);
